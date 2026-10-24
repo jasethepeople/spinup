@@ -9,7 +9,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from .config import Settings
 
@@ -135,6 +135,20 @@ class DockerSandbox(Sandbox):
         except subprocess.TimeoutExpired as exc:
             raise SandboxError(f"{self.runtime} command timed out") from exc
 
+    def _run_stdin(self, args: list[str], stdin: BinaryIO,
+                   timeout: int | None = None) -> subprocess.CompletedProcess[str]:
+        """Run an engine command with a streaming stdin file descriptor."""
+        try:
+            return subprocess.run(
+                [self.runtime, *args], stdin=stdin, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                timeout=timeout or self.timeout, check=False,
+            )
+        except FileNotFoundError as exc:
+            raise SandboxError(f"{self.runtime} not found") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise SandboxError(f"{self.runtime} command timed out") from exc
+
     def _check(self, args: list[str], timeout: int | None = None) -> str:
         result = self._run(args, timeout)
         if result.returncode != 0:
@@ -243,10 +257,42 @@ class DockerSandbox(Sandbox):
         shutil.copytree(source, destination, ignore=ignore, symlinks=True)
 
     def copy_in(self, source: Path) -> None:
+        """Stream the sanitized tree into the writable /workspace tmpfs.
+
+        docker cp rejects a read-only container rootfs on some daemons. A tar
+        stream through exec stdin writes only to the tmpfs and never buffers the
+        repository archive in memory. The proxy's separate docker cp is untouched.
+        """
         with tempfile.TemporaryDirectory(prefix="spinup-copy-") as tmp:
             clean = Path(tmp) / "source"
             self._safe_copy(source, clean)
-            self._check(["cp", f"{clean}/.", f"{self.name}:/workspace/"], self.settings.clone_timeout_seconds)
+            with tempfile.TemporaryFile(prefix="spinup-tar-errors-") as tar_errors:
+                try:
+                    tar_process = subprocess.Popen(
+                        ["tar", "-cf", "-", "-C", str(clean), "."],
+                        stdout=subprocess.PIPE, stderr=tar_errors,
+                    )
+                except OSError as exc:
+                    raise SandboxError(f"could not start host tar: {exc}") from exc
+                assert tar_process.stdout is not None
+                try:
+                    result = self._run_stdin(
+                        ["exec", "-i", self.name, "tar", "-x", "-C", "/workspace"],
+                        tar_process.stdout, self.settings.clone_timeout_seconds,
+                    )
+                finally:
+                    tar_process.stdout.close()
+                    try:
+                        tar_process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        tar_process.kill()
+                        tar_process.wait()
+                tar_errors.seek(0)
+                tar_detail = tar_errors.read().decode(errors="replace")[-4000:]
+                if tar_process.returncode != 0:
+                    raise SandboxError(f"host tar failed: {tar_detail or tar_process.returncode}")
+                if result.returncode != 0:
+                    raise SandboxError(f"container tar extraction failed: {result.stdout[-4000:]}")
         self._check(["exec", "--user", "root", self.name, "chown", "-R", "1000:1000", "/workspace", "/home/app"])
 
     def exec(self, command: str, timeout: int, env: dict[str, str] | None = None,

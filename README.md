@@ -214,7 +214,7 @@ The components communicate through `db.py`. SQLite's authorizer restricts each c
 
 - Only HTTPS `github.com/owner/repository` URLs are accepted. Git prompts, credential helpers, global Git config, and submodules are disabled.
 - The Analyst reads files directly. It never imports or executes repository code.
-- Containers receive a sanitized copy, not a host mount. `.git`, common credential files, private keys, and all symlinks are excluded.
+- Containers receive a sanitized copy, not a host mount. `.git`, common credential files, private keys, and all symlinks are excluded. The app tree is streamed as tar directly into `docker exec -i ... tar -x -C /workspace`, so read-only root filesystems remain intact and the archive is not buffered in memory. The proxy's separate configuration copy is unchanged.
 - Environment values are generated fake stubs. Host API keys are never forwarded.
 - App containers use an internal network. Outbound HTTP/HTTPS goes through a companion Squid proxy restricted to configured package/GitHub domains.
 - App containers publish no ports to the host. Verification connects to `127.0.0.1:PORT` from inside the app container's own network namespace, using available in-container tools with a `/proc/net/tcp*` LISTEN-socket fallback.

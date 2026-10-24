@@ -1,4 +1,6 @@
+import io
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -46,6 +48,48 @@ class SandboxTests(unittest.TestCase):
             self.assertFalse((clean / "private.pem").exists())
             self.assertFalse((clean / ".git").exists())
             self.assertFalse((clean / "linked-secret").exists())
+
+    def test_copy_in_streams_sanitized_tar_to_exec_stdin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            source.mkdir()
+            (source / "repro2.txt").write_text("hello")
+            (source / ".env").write_text("REAL_SECRET=excluded")
+            box = DockerSandbox(Settings.load(Path(tmp) / "state"), "python")
+            observed = {}
+
+            def consume_stream(args, stdin, timeout=None):
+                observed["args"] = args
+                observed["timeout"] = timeout
+                names = []
+                contents = {}
+                with tarfile.open(fileobj=stdin, mode="r|") as archive:
+                    for member in archive:
+                        names.append(member.name)
+                        if member.isfile():
+                            contents[member.name] = archive.extractfile(member).read().decode()
+                observed["names"] = names
+                observed["contents"] = contents
+                return subprocess.CompletedProcess(args, 0, stdout="")
+
+            with patch.object(box, "_run_stdin", side_effect=consume_stream), patch.object(box, "_check") as check:
+                box.copy_in(source)
+            self.assertEqual(["exec", "-i", box.name, "tar", "-x", "-C", "/workspace"], observed["args"])
+            self.assertEqual("hello", observed["contents"]["./repro2.txt"])
+            self.assertNotIn("./.env", observed["names"])
+            check.assert_called_once_with(["exec", "--user", "root", box.name, "chown", "-R", "1000:1000", "/workspace", "/home/app"])
+
+    def test_stdin_run_path_uses_stream_not_buffered_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            box = DockerSandbox(Settings.load(tmp), "python")
+            stream = io.BytesIO(b"not-buffered-by-spinup")
+            completed = subprocess.CompletedProcess([], 0, stdout="")
+            with patch("spinup.sandbox.subprocess.run", return_value=completed) as run:
+                result = box._run_stdin(["exec", "-i", box.name, "tar", "-x", "-C", "/workspace"], stream, 7)
+            self.assertEqual(0, result.returncode)
+            self.assertIs(stream, run.call_args.kwargs["stdin"])
+            self.assertNotIn("input", run.call_args.kwargs)
+            self.assertEqual(7, run.call_args.kwargs["timeout"])
 
     def test_limits(self):
         with tempfile.TemporaryDirectory() as tmp:

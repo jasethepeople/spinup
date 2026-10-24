@@ -10,7 +10,7 @@ Date: 2026-10-24
 - A standalone wheel built and installed successfully; its schema and all three prompt resources were present.
 - The installed `spinup --help` entry point worked.
 - The CLI returned the expected nonzero error for an unknown repository history lookup.
-- 27 unit/integration tests passed with `python3 -m unittest discover -s tests -v`.
+- 29 unit/integration tests passed with `python3 -m unittest discover -s tests -v`.
 - The end-to-end mock pipeline produced and reloaded a recipe only after process + port verification.
 - A simulated missing-module failure was repaired on attempt two and recorded as a worked lesson.
 - A port-verification failure was not exported as success.
@@ -18,6 +18,7 @@ Date: 2026-10-24
 - SQLite cross-lane raw writes and append-only violations were rejected by execution.
 - Static analysis did not execute a source file containing a deliberate marker-writing side effect.
 - A hostile symlink, `.env`, private key, and `.git` directory were excluded from the container copy staging area.
+- A real host tar stream was consumed incrementally in a Docker-free test: the sanitized payload arrived intact, `.env` stayed excluded, stdin was passed directly without buffered input, and the ownership step remained present.
 - Docker command construction was checked for internal networking, no `-p`/`--publish` arguments, read-only root, dropped capabilities, resource limits, and absence of mounts/privileged mode.
 - Mocked subprocess tests checked the ordered in-container Python/Node/Bash/nc probe, its `/proc/net/tcp*` LISTEN fallback, short timeout, and False-on-failure behavior.
 - The Squid default is pinned to `ubuntu/squid:6.6-24.04_beta`, not `latest`.
@@ -31,13 +32,14 @@ Date: 2026-10-24
 
 - Docker and Podman were not installed in the build environment. No real container run, network isolation test, image build, companion-service startup, or Docker/Podman replay is claimed.
 - The new in-sandbox port probe and no-published-port behavior are NOT yet verified on a real Docker or Podman runtime. Only their command construction and failure behavior were unit-tested with mocks.
+- The streamed `copy_in` implementation was not executed against the target daemon here. The supplied Docker 29.8.0/Kali result proves the tar-pipe mechanism, but the required safety-check and benchmark acceptance runs remain outstanding.
 - `scripts/docker_safety_check.py` was compiled and its CLI help was checked, but its real-container checks were not run here.
 - The 25-repository benchmark was not run. No real-repository success rate or Analyst improvement number is claimed.
 - Ollama and Anthropic network calls were not made. JSON parsing and deterministic repair behavior were tested locally.
 
 ## Required acceptance sequence on the real host
 
-1. Run `python -m unittest discover -s tests -v` and confirm 27 passing tests.
+1. Run `python -m unittest discover -s tests -v` and confirm 29 passing tests.
 2. Confirm `docker run hello-world` or the Podman equivalent.
 3. Run `python scripts/docker_safety_check.py`; require every check to pass.
 4. Run `python scripts/benchmark.py --limit 3` and inspect all failures.
