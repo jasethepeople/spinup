@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spinup-sandbox"
+version = "0.1.0"
+description = "Turn a GitHub repository into a verified, reusable container recipe"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "SpinUp contributors"}]
+dependencies = []
+
+[project.scripts]
+spinup = "spinup.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["spinup*"]
+
+[tool.setuptools.package-data]
+spinup = ["schema.sql", "prompts/*.txt"]

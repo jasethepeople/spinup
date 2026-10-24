@@ -1,0 +1,26 @@
+# Run only after scripts/docker_safety_check.py passes. Large/unusual repos may be unsupported.
+https://github.com/miguelgrinberg/microblog
+https://github.com/miguelgrinberg/flasky
+https://github.com/pallets/flask
+https://github.com/tiangolo/fastapi
+https://github.com/encode/starlette
+https://github.com/encode/uvicorn
+https://github.com/bottlepy/bottle
+https://github.com/django/django
+https://github.com/expressjs/express
+https://github.com/expressjs/expressjs.com
+https://github.com/vercel/next.js
+https://github.com/sveltejs/svelte
+https://github.com/gin-gonic/gin
+https://github.com/gofiber/fiber
+https://github.com/labstack/echo
+https://github.com/tokio-rs/axum
+https://github.com/actix/actix-web
+https://github.com/rust-lang/book
+https://github.com/docker/awesome-compose
+https://github.com/compose-spec/compose-spec
+https://github.com/squidfunk/mkdocs-material
+https://github.com/streamlit/streamlit
+https://github.com/gradio-app/gradio
+https://github.com/httpie/cli
+https://github.com/psf/requests
